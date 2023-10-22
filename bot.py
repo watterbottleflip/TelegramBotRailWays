@@ -1,112 +1,241 @@
-import telegram
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, ConversationHandler, CallbackContext
 import psycopg2
+from aiogram import Bot, Dispatcher, types
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters import Command
+from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
-# Состояния для конечного автомата
-TRAIN_NUMBER, DEPARTURE_TIME, DEPARTURE, DESTINATION = range(4)
+bot = Bot(token="6079500895:AAGtu2k8sWrPrexqhuUqZz3g6lFLxgWIXLE")
+dp = Dispatcher(bot, storage=MemoryStorage())
 
-# Функция для начала ввода данных о поезде
-def start(update, context):
-    update.message.reply_text("Введите номер поезда:")
-    return TRAIN_NUMBER
+class TrainInfoForm(StatesGroup):
+    TRAIN_NUMBER = State()
+    DEPARTURE_TIME = State()
+    DEPARTURE = State()
+    DESTINATION = State()
+    DELETE_CONFIRM = State()
+    EDIT_CHOICE = State()
+    EDIT_TRAIN_NUMBER = State()
+    EDIT_DEPARTURE_TIME = State()
+    EDIT_DEPARTURE = State()
+    EDIT_DESTINATION = State()
 
-# Функция для сохранения данных о поезде в базу данных
-def save_train_info(update, context):
-    user_id = update.message.from_user.id
-    train_number = context.user_data['train_number']
-    departure_time = context.user_data['departure_time']
-    departure = context.user_data['departure']
-    destination = context.user_data['destination']
 
-    conn = psycopg2.connect(database="trains", user="postgres", password="Admin1234", host="localhost")
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO trains (train_number, departure_time, departure, destination) VALUES (%s, %s, %s, %s)",
-                   (train_number, departure_time, departure, destination))
-    conn.commit()
-    conn.close()
+@dp.message_handler(commands=['start'])
+async def start(message: types.Message):
+    await message.reply("Здравствуйте! Этот бот🤖 позволяет записывать данные о ваших железнодорожных путях")
+    await message.reply("Доступные команды:")
+    await message.reply("ℹ️/start_to_save - для старта записи")
+    await message.reply("👁️/view - для просмотра сохраненных записей")
+    await message.reply("🗑️/delete - для удаления сохраненных записей")
+    await message.reply("✒️/edit - для редактирования записей")
+    await message.reply("🚫/cancel - для прерывания любого действия")
 
-    update.message.reply_text(f"Информация о поезде {train_number} сохранена в базе данных.")
-    context.user_data.clear()
-    return ConversationHandler.END
 
-# Функция для обработки ввода номера поезда
-def input_train_number(update, context):
-    user_data = context.user_data
-    user_data['train_number'] = update.message.text
-    update.message.reply_text("Введите время отправления (в формате ГГГГ-ММ-ДД ЧЧ:ММ):")
-    return DEPARTURE_TIME
+@dp.message_handler(commands=['start_to_save'])
+async def start_to_save(message: types.Message):
+    await message.reply("Для отмены текущего действия используйте /cancel.")
+    await message.reply("🚆Введите номер поезда🚆:")
+    await TrainInfoForm.TRAIN_NUMBER.set()
 
-# Функция для обработки ввода времени отправления
-def input_departure_time(update, context):
-    user_data = context.user_data
-    user_data['departure_time'] = update.message.text
-    update.message.reply_text("Введите пункт отправления:")
-    return DEPARTURE
 
-# Функция для обработки ввода пункта отправления
-def input_departure(update, context):
-    user_data = context.user_data
-    user_data['departure'] = update.message.text
-    update.message.reply_text("Введите пункт назначения:")
-    return DESTINATION
+@dp.message_handler(commands=['cancel'], state=TrainInfoForm.TRAIN_NUMBER)
+async def cancel_start_to_save(message: types.Message, state: FSMContext):
+    await state.finish()
+    await message.reply("Действие было отменено. Вы можете начать снова, используя доступные команды.")
 
-# Функция для обработки ввода пункта назначения
-def input_destination(update, context):
-    user_data = context.user_data
-    user_data['destination'] = update.message.text
 
-    update.message.reply_text("Пожалуй, проверьте введенные данные:\n"
-                              f"Номер поезда: {user_data['train_number']}\n"
-                              f"Время отправления: {user_data['departure_time']}\n"
-                              f"Пункт отправления: {user_data['departure']}\n"
-                              f"Пункт назначения: {user_data['destination']}\n"
-                              "Если все верно, нажмите /save для сохранения, иначе, начните заново /start.")
+@dp.message_handler(lambda message: message.text.startswith('/'), state=TrainInfoForm.TRAIN_NUMBER)
+async def handle_commands_in_start_to_save(message: types.Message, state: FSMContext):
+    await message.reply("Пожалуйста, завершите текущее действие или используйте /cancel для отмены.")
 
-    return ConversationHandler.END
 
-# Функция для отмены ввода
-def cancel(update, context):
-    update.message.reply_text("Ввод данных отменен.")
-    context.user_data.clear()
-    return ConversationHandler.END
+@dp.message_handler(state=TrainInfoForm.TRAIN_NUMBER)
+async def input_train_number(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data['train_number'] = message.text
+    await message.reply("🕖Введите время отправления (в формате ГГГГ-ММ-ДД ЧЧ:ММ)🕖:")
+    await TrainInfoForm.DEPARTURE_TIME.set()
 
-# Функция для просмотра данных
-def view_data(update, context):
-    conn = psycopg2.connect(database="trains", user="postgres", password="Admin1234", host="localhost")
+
+@dp.message_handler(state=TrainInfoForm.DEPARTURE_TIME)
+async def input_departure_time(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data['departure_time'] = message.text
+    await message.reply("🚉Введите пункт отправления:🚉")
+    await TrainInfoForm.DEPARTURE.set()
+
+
+@dp.message_handler(state=TrainInfoForm.DEPARTURE)
+async def input_departure(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data['departure'] = message.text
+    await message.reply("🚉Введите пункт назначения🚉:")
+    await TrainInfoForm.DESTINATION.set()
+
+
+@dp.message_handler(state=TrainInfoForm.DESTINATION)
+async def input_destination(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data['destination'] = message.text
+        train_number = data['train_number']
+        departure_time = data['departure_time']
+        departure = data['departure']
+        destination = data['destination']
+
+        conn = psycopg2.connect(database="TrainWay", user="postgres", password="Admin1234", host="localhost")
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO trains (train_number, departure_time, departure, destination) VALUES (%s, %s, %s, %s)",
+                       (train_number, departure_time, departure, destination))
+        conn.commit()
+        conn.close()
+
+        await message.reply(f"🚆Информация о поезде {train_number} сохранена в базе данных.")
+        await state.finish()
+
+
+@dp.message_handler(commands=['cancel'], state='*')
+async def cancel_handler(message: types.Message, state: FSMContext):
+    current_state = await state.get_state()
+    if current_state is None:
+        return
+
+    await state.finish()
+    # Отправьте сообщение пользователю о том, что действие было отменено.
+    await message.reply("Действие было отменено. Вы можете начать снова, используя доступные команды.")
+
+
+@dp.message_handler(commands=['view'])
+async def view_data(message: types.Message):
+    conn = psycopg2.connect(database="TrainWay", user="postgres", password="Admin1234", host="localhost")
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM trains")
     rows = cursor.fetchall()
     conn.close()
 
     if not rows:
-        update.message.reply_text("В базе данных нет данных о поездах.")
+        await message.reply("В базе данных нет данных о поездах.")
     else:
-        response = "Данные о поездах в базе данных:\n"
+        response = "Данные о 🚆поездах 🚆в базе данных:\n"
         for row in rows:
-            response += f"Номер поезда: {row[1]}\nВремя отправления: {row[2]}\nПункт отправления: {row[3]}\nПункт назначения: {row[4]}\n\n"
-        update.message.reply_text(response)
+            response += f"🚆Номер поезда🚆: {row[1]}\n🕖Время отправления🕖: {row[2]}\n🚉Пункт отправления🚉: {row[3]}\n🚉Пункт назначения🚉: {row[4]}\n\n"
+        await message.reply(response)
 
-def main():
-    updater = Updater(token="6079500895:AAGtu2k8sWrPrexqhuUqZz3g6lFLxgWIXLE", use_context=True)
-    dp = updater.dispatcher
 
-    conversation_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
-        states={
-            TRAIN_NUMBER: [MessageHandler(Filters.text & ~Filters.command, input_train_number)],
-            DEPARTURE_TIME: [MessageHandler(Filters.text & ~Filters.command, input_departure_time)],
-            DEPARTURE: [MessageHandler(Filters.text & ~Filters.command, input_departure)],
-            DESTINATION: [MessageHandler(Filters.text & ~Filters.command, input_destination)],
-        },
-        fallbacks=[CommandHandler('cancel', cancel)],
-    )
+@dp.message_handler(commands=['delete'])
+async def delete_data_start(message: types.Message):
+    await message.reply("Введите номер поезда, который вы хотите удалить:")
+    await TrainInfoForm.DELETE_CONFIRM.set()
 
-    dp.add_handler(conversation_handler)
-    dp.add_handler(CommandHandler('save', save_train_info))
-    dp.add_handler(CommandHandler('view', view_data))
 
-    updater.start_polling()
-    updater.idle()
+@dp.message_handler(lambda message: not message.text.startswith('/'), state=TrainInfoForm.DELETE_CONFIRM)
+async def delete_data_confirm(message: types.Message, state: FSMContext):
+    train_number = message.text
+
+    conn = psycopg2.connect(database="TrainWay", user="postgres", password="Admin1234", host="localhost")
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM trains WHERE train_number = %s", (train_number,))
+    conn.commit()
+    conn.close()
+
+    await message.reply(f"Данные о поезде с номером {train_number} были успешно удалены из базы данных.")
+    await state.finish()
+
+
+@dp.message_handler(commands=['edit'])
+async def edit_data_start(message: types.Message):
+    await message.reply("Введите номер поезда, который вы хотите отредактировать:")
+    await TrainInfoForm.EDIT_CHOICE.set()
+
+
+@dp.message_handler(lambda message: message.text.isdigit() and int(message.text) in [1, 2, 3, 4], state=TrainInfoForm.EDIT_CHOICE)
+async def edit_data_choose_parameter(message: types.Message, state: FSMContext):
+    choice = int(message.text)
+
+    if choice == 1:
+        await message.reply("Введите новый номер поезда:")
+        await TrainInfoForm.EDIT_TRAIN_NUMBER.set()
+    elif choice == 2:
+        await message.reply("Введите новое время отправления (в формате ГГГГ-ММ-ДД ЧЧ:ММ):")
+        await TrainInfoForm.EDIT_DEPARTURE_TIME.set()
+    elif choice == 3:
+        await message.reply("Введите новый пункт отправления:")
+        await TrainInfoForm.EDIT_DEPARTURE.set()
+    elif choice == 4:
+        await message.reply("Введите новый пункт назначения:")
+        await TrainInfoForm.EDIT_DESTINATION.set()
+
+
+@dp.message_handler(lambda message: not message.text.startswith('/'), state=TrainInfoForm.EDIT_TRAIN_NUMBER)
+async def edit_train_number(message: types.Message, state: FSMContext):
+    new_train_number = message.text
+    async with state.proxy() as data:
+        train_number = data['current_train']['train_number']
+
+    conn = psycopg2.connect(database="TrainWay", user="postgres", password="Admin1234", host="localhost")
+    cursor = conn.cursor()
+    cursor.execute("UPDATE trains SET train_number = %s WHERE train_number = %s", (new_train_number, train_number))
+    conn.commit()
+    conn.close()
+
+    await message.reply(f"Обновленный номер поезда: {new_train_number}")
+    await state.finish()
+    await message.reply("Редактирование завершено.")
+    await state.finish()
+
+
+@dp.message_handler(lambda message: not message.text.startswith('/'), state=TrainInfoForm.EDIT_DEPARTURE_TIME)
+async def edit_departure_time(message: types.Message, state: FSMContext):
+    new_departure_time = message.text
+    async with state.proxy() as data:
+        train_number = data['current_train']['train_number']
+
+    conn = psycopg2.connect(database="TrainWay", user="postgres", password="Admin1234", host="localhost")
+    cursor = conn.cursor()
+    cursor.execute("UPDATE trains SET departure_time = %s WHERE train_number = %s", (new_departure_time, train_number))
+    conn.commit()
+    conn.close()
+
+    await message.reply(f"Обновленное время отправления: {new_departure_time}")
+    await state.finish()
+    await message.reply("Редактирование завершено.")
+
+
+@dp.message_handler(lambda message: not message.text.startswith('/'), state=TrainInfoForm.EDIT_DEPARTURE)
+async def edit_departure(message: types.Message, state: FSMContext):
+    new_departure = message.text
+    async with state.proxy() as data:
+        train_number = data['current_train']['train_number']
+
+    conn = psycopg2.connect(database="TrainWay", user="postgres", password="Admin1234", host="localhost")
+    cursor = conn.cursor()
+    cursor.execute("UPDATE trains SET departure = %s WHERE train_number = %s", (new_departure, train_number))
+    conn.commit()
+    conn.close()
+
+    await message.reply(f"Обновленный пункт отправления: {new_departure}")
+    await state.finish()
+    await message.reply("Редактирование завершено.")
+
+
+@dp.message_handler(lambda message: not message.text.startswith('/'), state=TrainInfoForm.EDIT_DESTINATION)
+async def edit_destination(message: types.Message, state: FSMContext):
+    new_destination = message.text
+    async with state.proxy() as data:
+        train_number = data['current_train']['train_number']
+
+    conn = psycopg2.connect(database="TrainWay", user="postgres", password="Admin1234", host="localhost")
+    cursor = conn.cursor()
+    cursor.execute("UPDATE trains SET destination = %s WHERE train_number = %s", (new_destination, train_number))
+    conn.commit()
+    conn.close()
+
+    await message.reply(f"Обновленный пункт назначения: {new_destination}")
+    await state.finish()
+    await message.reply("Редактирование завершено.")
+
 
 if __name__ == '__main__':
-    main()
+    from aiogram import executor
+    executor.start_polling(dp, skip_updates=True)
