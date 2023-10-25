@@ -6,7 +6,7 @@ from aiogram.dispatcher.filters import Command
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
-bot = Bot(token="6079500895:AAGtu2k8sWrPrexqhuUqZz3g6lFLxgWIXLE")
+bot = Bot(token="YOUR_TOKEN")
 dp = Dispatcher(bot, storage=MemoryStorage())
 
 class TrainInfoForm(StatesGroup):
@@ -83,7 +83,7 @@ async def input_destination(message: types.Message, state: FSMContext):
         departure = data['departure']
         destination = data['destination']
 
-        conn = psycopg2.connect(database="RailWays", user="postgres", password="Admin1234", host="localhost")
+        conn = psycopg2.connect(database="your_database", user="your_usename", password="your+passwaord", host="your_host")
         cursor = conn.cursor()
         cursor.execute("INSERT INTO trains (train_number, departure_time, departure, destination) VALUES (%s, %s, %s, %s)",
                        (train_number, departure_time, departure, destination))
@@ -107,7 +107,7 @@ async def cancel_handler(message: types.Message, state: FSMContext):
 
 @dp.message_handler(commands=['view'])
 async def view_data(message: types.Message):
-    conn = psycopg2.connect(database="RailWays", user="postgres", password="Admin1234", host="localhost")
+    conn = psycopg2.connect(database="your_database", user="your_usename", password="your+passwaord", host="your_host")
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM trains")
     rows = cursor.fetchall()
@@ -180,7 +180,7 @@ async def edit_train_number(message: types.Message, state: FSMContext):
 
     # Check if train_number is defined and not None before using it
     if train_number is not None:
-        conn = psycopg2.connect(database="RailWays", user="postgres", password="Admin1234", host="localhost")
+        conn = psycopg2.connect(database="your_database", user="your_usename", password="your+passwaord", host="your_host")
         cursor = conn.cursor()
         cursor.execute("UPDATE trains SET train_number = %s WHERE train_number = %s", (new_train_number, train_number))
         conn.commit()
@@ -201,7 +201,7 @@ async def edit_departure_time(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         train_number = data['current_train']['train_number']
 
-    conn = psycopg2.connect(database="RailWays", user="postgres", password="Admin1234", host="localhost")
+    conn = psycopg2.connect(database="your_database", user="your_usename", password="your+passwaord", host="your_host")
     cursor = conn.cursor()
     cursor.execute("UPDATE trains SET departure_time = %s WHERE train_number = %s", (new_departure_time, train_number))
     conn.commit()
@@ -218,7 +218,7 @@ async def edit_departure(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         train_number = data['current_train']['train_number']
 
-    conn = psycopg2.connect(database="RailWays", user="postgres", password="Admin1234", host="localhost")
+    conn = psycopg2.connect(database="your_database", user="your_usename", password="your+passwaord", host="your_host")
     cursor = conn.cursor()
     cursor.execute("UPDATE trains SET departure = %s WHERE train_number = %s", (new_departure, train_number))
     conn.commit()
@@ -235,7 +235,7 @@ async def edit_destination(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         train_number = data['current_train']['train_number']
 
-    conn = psycopg2.connect(database="RailWays", user="postgres", password="Admin1234", host="localhost")
+    conn = psycopg2.connect(database="your_database", user="your_usename", password="your+passwaord", host="your_host")
     cursor = conn.cursor()
     cursor.execute("UPDATE trains SET destination = %s WHERE train_number = %s", (new_destination, train_number))
     conn.commit()
